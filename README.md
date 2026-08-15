@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # RevoShop Backend System
 
 Repository ini berisi skema database dan logika backend untuk RevoShop.
@@ -10,3 +11,6 @@ Repository ini berisi skema database dan logika backend untuk RevoShop.
 3. Jalankan script dari file `schema.sql` untuk membuat struktur tabel.
 4. Jalankan script dari file `seed.sql` untuk memasukkan data dummy.
 5. Jalankan script dari `queries.sql` untuk menguji pengambilan data (menampilkan 2 produk termahal yang ready stock).
+=======
+# Shanghai Backend
+>>>>>>> 1d62d85bbcfc9adb9b2f91683f4cdeacbf95ddea
