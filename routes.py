@@ -131,11 +131,23 @@ def create_product():
         return jsonify({"error": f"Missing required fields: {', '.join(missing)}"}), 400
 
     # Validasi nilai
-    if not data['name'].strip():
+    # 400 = masalah bentuk request (kosong / tipe salah)
+    # 422 = tipe benar tapi melanggar aturan bisnis (nilai negatif)
+    if not isinstance(data['name'], str) or not data['name'].strip():
         return jsonify({"error": "Product name cannot be empty"}), 400
 
-    if not isinstance(data['price'], (int, float)) or data['price'] <= 0:
-        return jsonify({"error": "Price must be a positive number"}), 400
+    if not isinstance(data['price'], (int, float)) or isinstance(data['price'], bool):
+        return jsonify({"error": "price must be a number"}), 400
+    if data['price'] < 0:
+        return jsonify({"error": "price must be 0 or greater"}), 422
+
+    # stock_quantity opsional; jika dikirim harus integer non-negatif
+    stock = data.get('stock_quantity', 0)
+    if 'stock_quantity' in data:
+        if not isinstance(stock, int) or isinstance(stock, bool):
+            return jsonify({"error": "stock must be an integer"}), 400
+        if stock < 0:
+            return jsonify({"error": "stock must be 0 or greater"}), 422
 
     try:
         product = Product(
@@ -143,7 +155,7 @@ def create_product():
             price=data['price'],
             category_id=data['category_id'],
             description=data.get('description', ''),
-            stock_quantity=data.get('stock_quantity', 0)
+            stock_quantity=stock
         )
         db.session.add(product)
         db.session.commit()
@@ -166,23 +178,30 @@ def update_product(id):
     if not data:
         return jsonify({"error": "Request body must be JSON"}), 400
 
-    # Validasi jika name dikirim
+    # Partial update — hanya validasi field yang dikirim.
+    # 400 = kosong / tipe salah, 422 = nilai negatif.
     if 'name' in data:
-        if not data['name'].strip():
-            return jsonify({"error": "Product name cannot be empty"}), 400
+        if not isinstance(data['name'], str) or not data['name'].strip():
+            return jsonify({"error": "name cannot be empty"}), 400
         product.name = data['name'].strip()
 
-    # Validasi jika price dikirim
     if 'price' in data:
-        if not isinstance(data['price'], (int, float)) or data['price'] <= 0:
-            return jsonify({"error": "Price must be a positive number"}), 400
+        if not isinstance(data['price'], (int, float)) or isinstance(data['price'], bool):
+            return jsonify({"error": "price must be a number"}), 400
+        if data['price'] < 0:
+            return jsonify({"error": "price must be 0 or greater"}), 422
         product.price = data['price']
+
+    if 'stock_quantity' in data:
+        if not isinstance(data['stock_quantity'], int) or isinstance(data['stock_quantity'], bool):
+            return jsonify({"error": "stock must be an integer"}), 400
+        if data['stock_quantity'] < 0:
+            return jsonify({"error": "stock must be 0 or greater"}), 422
+        product.stock_quantity = data['stock_quantity']
 
     # Update optional fields
     if 'description' in data:
         product.description = data['description']
-    if 'stock_quantity' in data:
-        product.stock_quantity = data['stock_quantity']
     if 'category_id' in data:
         product.category_id = data['category_id']
 

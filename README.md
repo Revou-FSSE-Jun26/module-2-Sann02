@@ -104,7 +104,12 @@ flask db upgrade
 
 ### 6. (Optional) Seed data
 ```bash
-psql -U postgres -d revoushop_db -f seed.sql
+# Cara 1 — via Python seed scripts (direkomendasikan)
+python -m helper.seed          # users, categories, products
+python -m helper.seed_order    # orders + order_items
+
+# Cara 2 — via file SQL (dokumentasi Checkpoint 1)
+psql -U postgres -d revoushop_db -f sql/seed.sql
 ```
 
 ### 7. Jalankan server
@@ -130,29 +135,40 @@ locust --host http://localhost:5000
 ## Project Structure
 ```
 revoshop-backend/
+├── run.py              # Entry point (python run.py / gunicorn run:app)
 ├── app.py              # Flask app initialization
 ├── config.py           # Configuration (reads from .env)
 ├── extensions.py       # SQLAlchemy & Migrate instances
 ├── models.py           # Database models (User, Product, Category, Order)
-├── routes.py           # All API endpoints
+├── routes.py           # All API endpoints (models / routes / config separated)
 ├── locustfile.py       # Load testing configuration
 ├── Procfile            # Deployment (gunicorn)
 ├── requirements.txt    # Python dependencies
 ├── .env                # Environment variables (not committed)
 ├── .env.example        # Template for .env
-├── .gitignore          # Files excluded from git
-├── schema.sql          # Database DDL (documentation)
-├── seed.sql            # Sample data
-├── queries.sql         # Example SQL queries
-├── migrations/         # Alembic migration files
+├── .gitignore          # Files excluded from git (.env, venv, __pycache__)
+├── helper/             # Database seeding scripts
+│   ├── seed.py         # Seed users, categories, products
+│   └── seed_order.py   # Seed orders + order_items
+├── sql/                # SQL documentation (Checkpoint 1)
+│   ├── schema.sql      # Database DDL
+│   ├── seed.sql        # Sample data
+│   └── queries.sql     # Example SQL queries
+├── migrations/         # Alembic / Flask-Migrate migration files
+├── screenshots/        # Postman, DBeaver/pgAdmin, and Locust evidence
 └── tests/
-    ├── conftest.py     # pytest fixtures
-    └── test_categories.py  # Category CRUD tests
+    ├── conftest.py         # pytest fixtures (in-memory SQLite)
+    ├── test_categories.py  # Category CRUD tests (happy + error paths)
+    └── test_products.py    # Product CRUD + validation tests
 ```
 
 ## Screenshots
 
-> Screenshots Postman dan pgAdmin akan ditambahkan setelah deployment.
+Bukti pengujian tersimpan di folder [`screenshots/`](screenshots/):
+
+- **Postman** — request untuk setiap HTTP method (GET, POST, PUT, DELETE) di seluruh modul, termasuk deletion guard (409) untuk product & category
+- **DBeaver / pgAdmin** — tampilan tabel lokal (`users`, `products`, `categories`, `orders`, `order_items`) beserta relasi/foreign key
+- **Locust** — dashboard load test dari 50 hingga 200 virtual users
 
 ## Deployment
 
