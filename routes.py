@@ -8,6 +8,33 @@ bp = Blueprint('routes', __name__)
 
 
 # ============================================================
+# ROOT / HEALTH CHECK
+# ============================================================
+@bp.route('/', methods=['GET'])
+def index():
+    """Welcome endpoint — menampilkan info API dan daftar endpoint utama."""
+    return jsonify({
+        "message": "RevoShop API is running",
+        "status": "ok",
+        "endpoints": {
+            "users": ["POST /users", "POST /auth/login"],
+            "products": [
+                "GET /products", "GET /products/<id>", "POST /products",
+                "PUT /products/<id>", "DELETE /products/<id>"
+            ],
+            "categories": [
+                "GET /categories", "GET /categories/<id>", "POST /categories",
+                "PUT /categories/<id>", "DELETE /categories/<id>"
+            ],
+            "orders": [
+                "GET /orders", "GET /orders/<id>", "POST /orders",
+                "PUT /orders/<id>", "DELETE /orders/<id>"
+            ]
+        }
+    }), 200
+
+
+# ============================================================
 # USER MODULE
 # ============================================================
 
