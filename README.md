@@ -1,8 +1,11 @@
 # RevoShop Backend API
 
+**Live API:** https://web-production-1b0825.up.railway.app
+Contoh: [`/products`](https://web-production-1b0825.up.railway.app/products)
+
 ## Overview
 
-RevoShop adalah REST API backend untuk aplikasi e-commerce sederhana yang dibangun menggunakan Flask dan PostgreSQL. API ini menyediakan fitur manajemen produk, kategori, pesanan, dan pengguna dengan autentikasi berbasis password hashing.
+RevoShop adalah REST API backend untuk aplikasi e-commerce sederhana yang dibangun menggunakan Flask dan PostgreSQL. API ini menyediakan fitur manajemen produk, kategori, pesanan, dan pengguna dengan autentikasi berbasis password hashing. Aplikasi berjalan live di Railway dengan managed PostgreSQL.
 
 ## Features
 
@@ -29,7 +32,7 @@ RevoShop adalah REST API backend untuk aplikasi e-commerce sederhana yang dibang
 | python-dotenv | Environment variable management |
 | gunicorn | Production WSGI server |
 | Werkzeug | Password hashing |
-| Render | Cloud deployment platform |
+| Railway | Cloud deployment platform (API + PostgreSQL) |
 
 ## API Endpoints
 
@@ -168,13 +171,28 @@ Bukti pengujian tersimpan di folder [`screenshots/`](screenshots/):
 
 - **Postman** — request untuk setiap HTTP method (GET, POST, PUT, DELETE) di seluruh modul, termasuk deletion guard (409) untuk product & category
 - **DBeaver / pgAdmin** — tampilan tabel lokal (`users`, `products`, `categories`, `orders`, `order_items`) beserta relasi/foreign key
+- **Hosted database (Railway)** — tampilan tabel yang sama pada database produksi Railway
+- **Live API (Postman)** — request CRUD terhadap URL produksi Railway
 - **Locust** — dashboard load test dari 50 hingga 200 virtual users
 
 ## Deployment
 
-API di-deploy menggunakan Render dengan managed PostgreSQL database.
+API di-deploy menggunakan **Railway** dengan managed PostgreSQL database.
 
-**Live URL:** *(akan diisi setelah deploy)*
+**Live URL:** https://web-production-1b0825.up.railway.app
+
+### Deployment setup (Railway)
+- **Start command:** `gunicorn run:app --bind 0.0.0.0:$PORT` (via `Procfile`)
+- **Environment variables** (di-set pada service Railway):
+  - `DATABASE_URL` — direferensikan dari service PostgreSQL: `${{Postgres.DATABASE_URL}}`
+  - `SECRET_KEY` — secret key aplikasi
+  - `FLASK_DEBUG` — `False` di produksi
+- **Migrasi produksi** dijalankan di dalam jaringan Railway:
+  ```bash
+  railway ssh --service web "flask db upgrade"
+  ```
+
+`config.py` menormalkan awalan `postgres://` menjadi `postgresql://` secara otomatis agar kompatibel dengan SQLAlchemy 2.x.
 
 ## Author
 
