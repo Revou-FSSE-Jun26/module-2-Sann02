@@ -23,6 +23,7 @@ COPY . .
 EXPOSE 5000
 
 # Jalankan lewat gunicorn (WSGI server produksi).
-# Bungkus dengan `sh -c` agar $PORT DIJAMIN ter-expand oleh shell.
-# Railway menyuntik $PORT saat runtime; fallback ke 5000 untuk lokal.
-CMD ["sh", "-c", "gunicorn run:app --bind 0.0.0.0:${PORT:-5000} --workers 2"]
+# Bind ke port TETAP 5000. Railway kadang tidak menyuntik $PORT ke build
+# Dockerfile, sehingga ekspansi "$PORT" gagal ("not a valid port number").
+# Dengan port tetap, set variable PORT=5000 di Railway agar router-nya cocok.
+CMD ["gunicorn", "run:app", "--bind", "0.0.0.0:5000", "--workers", "2"]
