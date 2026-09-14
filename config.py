@@ -20,6 +20,11 @@ class Config:
 
     # JWT: kalau JWT_SECRET_KEY tidak diset, jatuh ke SECRET_KEY supaya app tetap jalan.
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY') or SECRET_KEY
-    JWT_EXPIRES_HOURS = int(os.getenv('JWT_EXPIRES_HOURS', '24'))
+
+    # Parse aman: apa pun nilai env-nya, jangan sampai bikin app crash saat boot.
+    try:
+        JWT_EXPIRES_HOURS = int(os.getenv('JWT_EXPIRES_HOURS', '24'))
+    except (TypeError, ValueError):
+        JWT_EXPIRES_HOURS = 24
 
     DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() in ('true', '1', 'yes')
