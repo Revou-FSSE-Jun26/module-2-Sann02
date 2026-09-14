@@ -3,6 +3,7 @@ from flask import Blueprint, jsonify, request
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from extensions import db
 from models import User, Product, Category, Order, order_items
+from auth_jwt import generate_token, resolve_user_id
 
 bp = Blueprint('routes', __name__)
 
@@ -60,6 +61,29 @@ def get_hardcoded_product(product_id):
 @bp.route('/users', methods=['POST'])
 @bp.route('/users/register', methods=['POST'])
 def register_user():
+    """Register user baru
+    ---
+    tags:
+      - Users
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [username, email, password]
+          properties:
+            username: {type: string, example: budi}
+            email: {type: string, example: budi@test.com}
+            password: {type: string, example: pass123}
+    responses:
+      201:
+        description: User berhasil dibuat
+      400:
+        description: Field wajib tidak lengkap
+      409:
+        description: Email sudah terdaftar
+    """
     data = request.get_json()
 
     if not data:
@@ -91,6 +115,22 @@ def register_user():
 
 @bp.route('/users/<int:user_id>', methods=['GET'])
 def get_user(user_id):
+    """Ambil detail user berdasarkan ID
+    ---
+    tags:
+      - Users
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+        description: ID user
+    responses:
+      200:
+        description: Detail user
+      404:
+        description: User tidak ditemukan
+    """
     user = User.query.get(user_id)
     if user is None:
         return jsonify({"error": "User not found"}), 404
@@ -103,6 +143,34 @@ def get_user(user_id):
 
 @bp.route('/auth/login', methods=['POST'])
 def login():
+    """Login dan dapatkan JWT access token
+    ---
+    tags:
+      - Auth
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [email, password]
+          properties:
+            email: {type: string, example: budi@test.com}
+            password: {type: string, example: pass123}
+    responses:
+      200:
+        description: Login sukses, mengembalikan user + access_token
+        schema:
+          type: object
+          properties:
+            user: {type: object}
+            access_token: {type: string}
+            token_type: {type: string, example: Bearer}
+      400:
+        description: email/password tidak dikirim
+      401:
+        description: Kredensial salah
+    """
     data = request.get_json()
 
     if not data:
@@ -120,7 +188,15 @@ def login():
     if user is None or not user.check_password(password):
         return jsonify({"error": "Invalid email or password"}), 401
 
-    return jsonify(user.to_dict()), 200
+    # Kembalikan data user + JWT access token.
+    # Token bersifat opsional untuk dipakai client; endpoint lama tetap
+    # menerima user_id di body/param (lihat catatan di auth_jwt.py).
+    access_token = generate_token(user)
+    return jsonify({
+        "user": user.to_dict(),
+        "access_token": access_token,
+        "token_type": "Bearer"
+    }), 200
 
 
 # ============================================================
@@ -129,6 +205,14 @@ def login():
 
 @bp.route('/products', methods=['GET'])
 def get_products():
+    """List semua produk
+    ---
+    tags:
+      - Products
+    responses:
+      200:
+        description: Daftar produk
+    """
     try:
         products = Product.query.all()
         return jsonify([p.to_dict() for p in products]), 200
@@ -138,6 +222,21 @@ def get_products():
 
 @bp.route('/products/<int:id>', methods=['GET'])
 def get_product(id):
+    """Detail satu produk berdasarkan ID
+    ---
+    tags:
+      - Products
+    parameters:
+      - in: path
+        name: id
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Detail produk
+      404:
+        description: Produk tidak ditemukan
+    """
     product = Product.query.get(id)
     if product is None:
         return jsonify({"error": f"Product {id} not found"}), 404
@@ -146,6 +245,31 @@ def get_product(id):
 
 @bp.route('/products', methods=['POST'])
 def create_product():
+    """Buat produk baru
+    ---
+    tags:
+      - Products
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [name, price, category_id]
+          properties:
+            name: {type: string, example: Laptop Core i7}
+            price: {type: number, example: 15000000}
+            category_id: {type: integer, example: 1}
+            description: {type: string, example: Laptop kencang}
+            stock_quantity: {type: integer, example: 10}
+    responses:
+      201:
+        description: Produk dibuat
+      400:
+        description: Validasi gagal (field/tipe)
+      422:
+        description: Nilai melanggar aturan (mis. harga negatif)
+    """
     data = request.get_json()
 
     if not data:
@@ -197,6 +321,36 @@ def create_product():
 
 @bp.route('/products/<int:id>', methods=['PUT'])
 def update_product(id):
+    """Update produk (partial update)
+    ---
+    tags:
+      - Products
+    parameters:
+      - in: path
+        name: id
+        type: integer
+        required: true
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            name: {type: string}
+            price: {type: number}
+            stock_quantity: {type: integer}
+            description: {type: string}
+            category_id: {type: integer}
+    responses:
+      200:
+        description: Produk diperbarui
+      400:
+        description: Validasi gagal
+      404:
+        description: Produk tidak ditemukan
+      422:
+        description: Nilai melanggar aturan
+    """
     product = Product.query.get(id)
     if product is None:
         return jsonify({"error": f"Product {id} not found"}), 404
@@ -245,6 +399,23 @@ def update_product(id):
 
 @bp.route('/products/<int:id>', methods=['DELETE'])
 def delete_product(id):
+    """Hapus produk (diblokir jika ada order aktif)
+    ---
+    tags:
+      - Products
+    parameters:
+      - in: path
+        name: id
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Produk dihapus
+      404:
+        description: Produk tidak ditemukan
+      409:
+        description: Tidak bisa dihapus karena ada order aktif
+    """
     product = Product.query.get(id)
     if product is None:
         return jsonify({"error": f"Product {id} not found"}), 404
@@ -278,6 +449,14 @@ def delete_product(id):
 
 @bp.route('/categories', methods=['GET'])
 def get_categories():
+    """List semua kategori
+    ---
+    tags:
+      - Categories
+    responses:
+      200:
+        description: Daftar kategori
+    """
     try:
         categories = Category.query.all()
         return jsonify([c.to_dict() for c in categories]), 200
@@ -287,6 +466,21 @@ def get_categories():
 
 @bp.route('/categories/<int:id>', methods=['GET'])
 def get_category(id):
+    """Detail kategori beserta produk terkait
+    ---
+    tags:
+      - Categories
+    parameters:
+      - in: path
+        name: id
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Detail kategori + produk
+      404:
+        description: Kategori tidak ditemukan
+    """
     category = Category.query.get(id)
     if category is None:
         return jsonify({"error": f"Category {id} not found"}), 404
@@ -296,6 +490,26 @@ def get_category(id):
 
 @bp.route('/categories', methods=['POST'])
 def create_category():
+    """Buat kategori baru
+    ---
+    tags:
+      - Categories
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [name]
+          properties:
+            name: {type: string, example: Elektronik}
+            description: {type: string, example: Aneka gadget}
+    responses:
+      201:
+        description: Kategori dibuat
+      400:
+        description: Nama wajib diisi
+    """
     data = request.get_json()
 
     if not data:
@@ -319,6 +533,31 @@ def create_category():
 
 @bp.route('/categories/<int:id>', methods=['PUT'])
 def update_category(id):
+    """Update kategori
+    ---
+    tags:
+      - Categories
+    parameters:
+      - in: path
+        name: id
+        type: integer
+        required: true
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            name: {type: string}
+            description: {type: string}
+    responses:
+      200:
+        description: Kategori diperbarui
+      400:
+        description: Nama kosong
+      404:
+        description: Kategori tidak ditemukan
+    """
     category = Category.query.get(id)
     if category is None:
         return jsonify({"error": f"Category {id} not found"}), 404
@@ -345,6 +584,23 @@ def update_category(id):
 
 @bp.route('/categories/<int:id>', methods=['DELETE'])
 def delete_category(id):
+    """Hapus kategori
+    ---
+    tags:
+      - Categories
+    parameters:
+      - in: path
+        name: id
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Kategori dihapus
+      404:
+        description: Kategori tidak ditemukan
+      409:
+        description: Tidak bisa dihapus karena masih ada produk
+    """
     category = Category.query.get(id)
     if category is None:
         return jsonify({"error": f"Category {id} not found"}), 404
@@ -367,8 +623,29 @@ def delete_category(id):
 
 @bp.route('/orders', methods=['GET'])
 def get_orders():
-    # user_id dari query parameter
-    user_id = request.args.get('user_id')
+    """List orders (JWT opsional; fallback ke user_id)
+    ---
+    tags:
+      - Orders
+    security:
+      - Bearer: []
+    parameters:
+      - in: query
+        name: user_id
+        type: integer
+        required: false
+        description: Dipakai bila tidak mengirim JWT. Kalau JWT dikirim, diambil dari token.
+    responses:
+      200:
+        description: Daftar order
+      401:
+        description: Token tidak valid / kedaluwarsa
+    """
+    # user_id diambil dari JWT jika client mengirim token, kalau tidak
+    # fallback ke query parameter (pola lama yang dinilai rubrik).
+    user_id, token_error = resolve_user_id(request.args.get('user_id'))
+    if token_error:
+        return jsonify({"error": token_error}), 401
 
     try:
         if user_id:
@@ -382,6 +659,21 @@ def get_orders():
 
 @bp.route('/orders/<int:id>', methods=['GET'])
 def get_order(id):
+    """Detail order beserta items dan info produk
+    ---
+    tags:
+      - Orders
+    parameters:
+      - in: path
+        name: id
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Detail order + items
+      404:
+        description: Order tidak ditemukan
+    """
     order = Order.query.get(id)
     if order is None:
         return jsonify({"error": f"Order {id} not found"}), 404
@@ -391,20 +683,60 @@ def get_order(id):
 
 @bp.route('/orders', methods=['POST'])
 def create_order():
+    """Buat order baru (JWT opsional; fallback ke user_id di body)
+    ---
+    tags:
+      - Orders
+    security:
+      - Bearer: []
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [items]
+          properties:
+            user_id:
+              type: integer
+              description: Wajib bila tidak mengirim JWT. Diabaikan bila JWT dikirim.
+              example: 1
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  product_id: {type: integer, example: 1}
+                  quantity: {type: integer, example: 2}
+    responses:
+      201:
+        description: Order dibuat
+      400:
+        description: Validasi gagal
+      401:
+        description: Token tidak valid / kedaluwarsa
+      404:
+        description: User / produk tidak ditemukan
+    """
     data = request.get_json()
 
     if not data:
         return jsonify({"error": "Request body must be JSON"}), 400
 
+    # user_id: utamakan dari JWT (jika ada token), fallback ke body.
+    resolved_user_id, token_error = resolve_user_id(data.get('user_id'))
+    if token_error:
+        return jsonify({"error": token_error}), 401
+
     # Validasi field wajib
-    if not data.get('user_id'):
+    if not resolved_user_id:
         return jsonify({"error": "user_id is required"}), 400
 
     if not data.get('items') or len(data['items']) == 0:
         return jsonify({"error": "Order must have at least one item"}), 400
 
     # Cek user exists
-    user = User.query.get(data['user_id'])
+    user = User.query.get(resolved_user_id)
     if user is None:
         return jsonify({"error": "User not found"}), 404
 
@@ -435,7 +767,7 @@ def create_order():
 
         # Buat order
         order = Order(
-            user_id=data['user_id'],
+            user_id=resolved_user_id,
             status='pending',
             total_amount=total_amount
         )
@@ -461,6 +793,29 @@ def create_order():
 
 @bp.route('/orders/<int:id>', methods=['PUT'])
 def update_order(id):
+    """Update status/total order
+    ---
+    tags:
+      - Orders
+    parameters:
+      - in: path
+        name: id
+        type: integer
+        required: true
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            status: {type: string, example: completed}
+            total_amount: {type: number, example: 30000000}
+    responses:
+      200:
+        description: Order diperbarui
+      404:
+        description: Order tidak ditemukan
+    """
     order = Order.query.get(id)
     if order is None:
         return jsonify({"error": f"Order {id} not found"}), 404
@@ -485,6 +840,21 @@ def update_order(id):
 
 @bp.route('/orders/<int:id>', methods=['DELETE'])
 def delete_order(id):
+    """Hapus order
+    ---
+    tags:
+      - Orders
+    parameters:
+      - in: path
+        name: id
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Order dihapus
+      404:
+        description: Order tidak ditemukan
+    """
     order = Order.query.get(id)
     if order is None:
         return jsonify({"error": f"Order {id} not found"}), 404

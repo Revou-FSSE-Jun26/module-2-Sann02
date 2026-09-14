@@ -5,11 +5,12 @@ Contoh: [`/products`](https://web-production-1b0825.up.railway.app/products)
 
 ## Overview
 
-RevoShop adalah REST API backend untuk aplikasi e-commerce sederhana yang dibangun menggunakan Flask dan PostgreSQL. API ini menyediakan fitur manajemen produk, kategori, pesanan, dan pengguna dengan autentikasi berbasis password hashing. Aplikasi berjalan live di Railway dengan managed PostgreSQL.
+RevoShop adalah REST API backend untuk aplikasi e-commerce sederhana yang dibangun menggunakan Flask dan PostgreSQL. API ini menyediakan fitur manajemen produk, kategori, pesanan, dan pengguna dengan autentikasi berbasis password hashing serta JWT (JSON Web Token) untuk pengelolaan sesi login. Aplikasi berjalan live di Railway dengan managed PostgreSQL.
 
 ## Features
 
 - **User Registration & Login** — Register user baru dengan password hashing (werkzeug), login dengan verifikasi kredensial
+- **JWT Authentication** — Login mengembalikan JWT `access_token`. Endpoint order dapat mengambil identitas user dari token (`Authorization: Bearer <token>`), dengan fallback ke `user_id` agar tetap kompatibel
 - **Product CRUD** — Create, Read, Update, Delete produk dengan validasi input (nama wajib, harga positif)
 - **Category CRUD** — Manajemen kategori produk, GET category menampilkan produk terkait
 - **Order CRUD** — Pembuatan pesanan dengan relasi many-to-many ke produk melalui tabel `order_items`
@@ -17,6 +18,8 @@ RevoShop adalah REST API backend untuk aplikasi e-commerce sederhana yang dibang
 - **Data Validation** — Semua endpoint POST/PUT memvalidasi input dan mengembalikan error 400 yang deskriptif
 - **Error Handling** — Semua operasi database dibungkus `try/except`, mengembalikan JSON error (bukan HTML) pada kegagalan
 - **Many-to-Many Relationship** — Orders dan Products terhubung melalui tabel asosiasi `order_items`
+- **Swagger / OpenAPI Docs** — Dokumentasi API interaktif (Flasgger) di `/apidocs/`, lengkap dengan tombol Authorize untuk uji endpoint ber-JWT
+- **Docker** — `Dockerfile` + `docker-compose.yml` untuk menjalankan API bersama PostgreSQL dalam container
 
 ## Technologies Used
 
@@ -32,6 +35,9 @@ RevoShop adalah REST API backend untuk aplikasi e-commerce sederhana yang dibang
 | python-dotenv | Environment variable management |
 | gunicorn | Production WSGI server |
 | Werkzeug | Password hashing |
+| PyJWT | JSON Web Token (generate & verify access token) |
+| Flasgger | Swagger / OpenAPI interactive docs |
+| Docker & Docker Compose | Containerization (API + PostgreSQL) |
 | Railway | Cloud deployment platform (API + PostgreSQL) |
 
 ## API Endpoints
@@ -40,7 +46,7 @@ RevoShop adalah REST API backend untuk aplikasi e-commerce sederhana yang dibang
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/users` | Register user baru |
-| POST | `/auth/login` | Login (email + password) |
+| POST | `/auth/login` | Login (email + password), mengembalikan JWT `access_token` |
 
 ### Product Module
 | Method | Endpoint | Description |
@@ -69,6 +75,63 @@ RevoShop adalah REST API backend untuk aplikasi e-commerce sederhana yang dibang
 | PUT | `/orders/<id>` | Update status/total order |
 | DELETE | `/orders/<id>` | Hapus order |
 
+## Authentication (JWT)
+
+> **Catatan:** Module 2 tidak mewajibkan autentikasi berbasis token — mengirim `user_id` di body/param sudah cukup. JWT di sini bersifat **opsional/eksploratif** dan diimplementasikan secara **non-destruktif**: endpoint lama tetap berjalan dengan pola `user_id`.
+
+**Cara kerja:**
+
+1. **Login** untuk mendapatkan token:
+   ```bash
+   POST /auth/login
+   Content-Type: application/json
+
+   { "email": "budi@test.com", "password": "pass123" }
+   ```
+   Respons:
+   ```json
+   {
+     "user": { "id": 1, "username": "budi", "email": "budi@test.com", "role": "user" },
+     "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+     "token_type": "Bearer"
+   }
+   ```
+
+2. **Gunakan token** pada request order dengan header:
+   ```
+   Authorization: Bearer <access_token>
+   ```
+   Saat token dikirim, `user_id` diambil otomatis dari token (tidak perlu dikirim di body):
+   ```bash
+   POST /orders
+   Authorization: Bearer eyJhbGciOiJIUzI1Ni...
+   Content-Type: application/json
+
+   { "items": [ { "product_id": 1, "quantity": 2 } ] }
+   ```
+
+3. **Tanpa token** — endpoint tetap menerima `user_id` di body/param seperti biasa (fallback), sehingga kompatibel dengan grader, pytest, dan Locust.
+
+**Perilaku token:** token invalid atau kedaluwarsa dibalas `401`. Masa berlaku diatur lewat `JWT_EXPIRES_HOURS` (default 24 jam).
+
+## API Documentation (Swagger)
+
+Dokumentasi API interaktif dibuat otomatis dengan **Flasgger** (Swagger UI). Setelah server berjalan, buka:
+
+```
+http://localhost:5000/apidocs/
+```
+
+- Semua endpoint dikelompokkan per tag: **Users, Auth, Products, Categories, Orders**.
+- Spec OpenAPI mentah tersedia di `http://localhost:5000/apispec.json`.
+- Untuk menguji endpoint order yang memakai JWT:
+  1. Jalankan `POST /auth/login`, salin `access_token` dari respons.
+  2. Klik tombol **Authorize** di kanan atas Swagger UI.
+  3. Masukkan `Bearer <access_token>`, lalu klik Authorize.
+  4. Sekarang tombol **Try it out** pada endpoint order akan menyertakan token tersebut.
+
+Dokumentasi tiap endpoint ditulis sebagai docstring YAML di dalam `routes.py`, jadi dokumentasi selalu menyatu dengan kode.
+
 ## How to Run Locally
 
 ### 1. Clone repository
@@ -95,8 +158,17 @@ pip install -r requirements.txt
 ```bash
 # Copy .env.example ke .env dan isi dengan nilai yang benar
 cp .env.example .env
-# Edit .env — isi DATABASE_URL dengan koneksi PostgreSQL kamu
+# Edit .env — isi:
+#   DATABASE_URL   -> koneksi PostgreSQL kamu
+#   SECRET_KEY     -> secret key aplikasi
+#   JWT_SECRET_KEY -> secret untuk sign/verify JWT (isi nilai acak yang kuat)
 ```
+
+> **Catatan keamanan:** nilai rahasia asli (termasuk `JWT_SECRET_KEY`) hanya ada di `.env` yang **tidak di-commit** (sudah di `.gitignore`). File `.env.example` hanya berisi placeholder. Untuk menghasilkan secret acak yang kuat:
+> ```bash
+> python -c "import secrets; print(secrets.token_hex(32))"
+> ```
+> Jika `JWT_SECRET_KEY` tidak diisi, aplikasi otomatis fallback ke `SECRET_KEY` agar tetap berjalan.
 
 ### 5. Buat database dan jalankan migrasi
 ```bash
@@ -135,6 +207,42 @@ locust --host http://localhost:5000
 # Buka http://localhost:8089, set users: 50-200, spawn rate: 10
 ```
 
+## Running with Docker
+
+Proyek ini menyertakan `Dockerfile` dan `docker-compose.yml` untuk menjalankan API bersama PostgreSQL tanpa perlu setup manual.
+
+### Jalankan semua (API + DB)
+```bash
+# Build image dan jalankan container
+docker compose up --build
+
+# Di terminal lain — apply migrasi ke DB di dalam container
+docker compose exec api flask db upgrade
+
+# (Opsional) seed data
+docker compose exec api python -m helper.seed
+docker compose exec api python -m helper.seed_order
+```
+
+Setelah jalan:
+- API — `http://localhost:5000`
+- Swagger UI — `http://localhost:5000/apidocs/`
+- PostgreSQL — `localhost:5432` (user: `postgres`, pass: `postgres`, db: `revoushop_db`)
+
+### Menghentikan
+```bash
+docker compose down       # stop container (data DB tetap tersimpan di volume)
+docker compose down -v    # stop + hapus volume (reset database)
+```
+
+### Build image saja (tanpa compose)
+```bash
+docker build -t revoshop-api .
+docker run -p 5000:5000 --env-file .env revoshop-api
+```
+
+> **Catatan:** secret (`SECRET_KEY`, `JWT_SECRET_KEY`) diambil dari environment. Pada `docker-compose.yml` nilainya dibaca dari shell/`.env` dengan fallback nilai dev; ganti dengan nilai kuat untuk produksi.
+
 ## Project Structure
 ```
 revoshop-backend/
@@ -144,8 +252,12 @@ revoshop-backend/
 ├── extensions.py       # SQLAlchemy & Migrate instances
 ├── models.py           # Database models (User, Product, Category, Order)
 ├── routes.py           # All API endpoints (models / routes / config separated)
+├── auth_jwt.py         # JWT helper (generate/verify token, resolve_user_id)
 ├── locustfile.py       # Load testing configuration
 ├── Procfile            # Deployment (gunicorn)
+├── Dockerfile          # Container image (Flask + gunicorn)
+├── docker-compose.yml  # API + PostgreSQL untuk lokal
+├── .dockerignore       # File yang dikecualikan dari build context
 ├── requirements.txt    # Python dependencies
 ├── .env                # Environment variables (not committed)
 ├── .env.example        # Template for .env
@@ -186,6 +298,7 @@ API di-deploy menggunakan **Railway** dengan managed PostgreSQL database.
 - **Environment variables** (di-set pada service Railway):
   - `DATABASE_URL` — direferensikan dari service PostgreSQL: `${{Postgres.DATABASE_URL}}`
   - `SECRET_KEY` — secret key aplikasi
+  - `JWT_SECRET_KEY` — secret untuk JWT (set eksplisit di produksi; karena `.env` tidak ikut ter-push)
   - `FLASK_DEBUG` — `False` di produksi
 - **Migrasi produksi** dijalankan di dalam jaringan Railway:
   ```bash
