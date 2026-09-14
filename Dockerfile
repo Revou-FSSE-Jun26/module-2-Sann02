@@ -23,5 +23,6 @@ COPY . .
 EXPOSE 5000
 
 # Jalankan lewat gunicorn (WSGI server produksi).
-# Pakai bentuk shell agar $PORT dari environment ter-expand.
-CMD gunicorn run:app --bind 0.0.0.0:${PORT} --workers 2
+# Bungkus dengan `sh -c` agar $PORT DIJAMIN ter-expand oleh shell.
+# Railway menyuntik $PORT saat runtime; fallback ke 5000 untuk lokal.
+CMD ["sh", "-c", "gunicorn run:app --bind 0.0.0.0:${PORT:-5000} --workers 2"]
