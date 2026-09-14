@@ -1,0 +1,50 @@
+# docker-compose.yml — jalankan RevoShop API + PostgreSQL secara lokal
+#
+# Cara pakai:
+#   docker compose up --build          -> build & jalankan
+#   docker compose exec api flask db upgrade   -> apply migrasi di dalam container
+#   docker compose down                -> hentikan
+#   docker compose down -v             -> hentikan + hapus volume DB
+#
+# API   -> http://localhost:5000  (Swagger UI: http://localhost:5000/apidocs/)
+# DB    -> localhost:5432 (user/pass/db lihat di bawah)
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: revoshop_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: revoushop_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d revoushop_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: revoshop_api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Di dalam network compose, host DB adalah nama service "db" (bukan localhost)
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/revoushop_db
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-change-me}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-jwt-secret-change-me}
+      JWT_EXPIRES_HOURS: ${JWT_EXPIRES_HOURS:-24}
+      FLASK_DEBUG: "False"
+      PORT: "5000"
+    ports:
+      - "5000:5000"
+
+volumes:
+  pgdata:

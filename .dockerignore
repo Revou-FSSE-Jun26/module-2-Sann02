@@ -1,0 +1,29 @@
+# Version control
+.git
+.gitignore
+
+# Environment / secrets — JANGAN masuk image
+.env
+
+# Python cache & venv
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.pytest_cache/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Dokumentasi & aset berat yang tidak diperlukan runtime
+screenshots/
+README.md
+
+# Docker sendiri
+Dockerfile
+.dockerignore
+docker-compose.yml
