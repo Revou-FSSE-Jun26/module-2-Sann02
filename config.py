@@ -17,4 +17,9 @@ class Config:
     SQLALCHEMY_DATABASE_URI = _normalize_db_url(os.getenv('DATABASE_URL'))
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SECRET_KEY = os.getenv('SECRET_KEY', 'fallback-secret-key')
+
+    # JWT: kalau JWT_SECRET_KEY tidak diset, jatuh ke SECRET_KEY supaya app tetap jalan.
+    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY') or SECRET_KEY
+    JWT_EXPIRES_HOURS = int(os.getenv('JWT_EXPIRES_HOURS', '24'))
+
     DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() in ('true', '1', 'yes')
