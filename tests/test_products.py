@@ -36,6 +36,36 @@ class TestGetProducts:
         assert res.get_json()['name'] == 'Laptop'
 
 
+class TestFilterProducts:
+    """GET /products?search=&category_id="""
+
+    def _seed(self, client):
+        elek = _make_category(client, 'Elektronik')
+        buku = _make_category(client, 'Buku')
+        for name, cid in [('Laptop Asus', elek), ('Mouse Logitech', elek), ('Buku Laptop Tips', buku)]:
+            client.post('/products', json={'name': name, 'price': 1000, 'category_id': cid})
+        return elek, buku
+
+    def test_search_is_case_insensitive_partial(self, client):
+        self._seed(client)
+        names = [p['name'] for p in client.get('/products?search=LAPTOP').get_json()]
+        assert names == ['Laptop Asus', 'Buku Laptop Tips']
+
+    def test_filter_by_category_id(self, client):
+        elek, _ = self._seed(client)
+        names = [p['name'] for p in client.get(f'/products?category_id={elek}').get_json()]
+        assert names == ['Laptop Asus', 'Mouse Logitech']
+
+    def test_search_and_category_combined(self, client):
+        _, buku = self._seed(client)
+        names = [p['name'] for p in client.get(f'/products?search=laptop&category_id={buku}').get_json()]
+        assert names == ['Buku Laptop Tips']
+
+    def test_no_params_returns_all(self, client):
+        self._seed(client)
+        assert len(client.get('/products').get_json()) == 3
+
+
 class TestCreateProduct:
     """POST /products"""
 

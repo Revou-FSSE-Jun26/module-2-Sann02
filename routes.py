@@ -205,16 +205,37 @@ def login():
 
 @bp.route('/products', methods=['GET'])
 def get_products():
-    """List semua produk
+    """List semua produk (opsional: filter search & category_id)
     ---
     tags:
       - Products
+    parameters:
+      - in: query
+        name: search
+        type: string
+        required: false
+        description: Cari produk berdasarkan nama (case-insensitive, partial match)
+      - in: query
+        name: category_id
+        type: integer
+        required: false
+        description: Hanya produk dari kategori ini
     responses:
       200:
         description: Daftar produk
     """
+    # Kedua filter opsional — tanpa query param perilakunya sama seperti sebelumnya.
+    search = (request.args.get('search') or '').strip()
+    category_id = request.args.get('category_id', type=int)
+
     try:
-        products = Product.query.all()
+        query = Product.query
+        if search:
+            # ilike + bound parameter -> case-insensitive dan aman dari SQL injection
+            query = query.filter(Product.name.ilike(f"%{search}%"))
+        if category_id:
+            query = query.filter(Product.category_id == category_id)
+        products = query.order_by(Product.id).all()
         return jsonify([p.to_dict() for p in products]), 200
     except SQLAlchemyError:
         return jsonify({"error": "Failed to fetch products"}), 500
