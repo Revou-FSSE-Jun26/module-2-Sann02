@@ -6,7 +6,7 @@ FROM python:3.12-slim
 #  - PYTHONUNBUFFERED: log langsung ter-flush (penting untuk container)
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PORT=5000
+    FLASK_APP=app.py
 
 WORKDIR /app
 
@@ -20,10 +20,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Salin sisa kode aplikasi
 COPY . .
 
-EXPOSE 5000
+# Jadikan entrypoint executable
+RUN chmod +x entrypoint.sh
 
-# Jalankan lewat gunicorn (WSGI server produksi).
-# Bind ke port TETAP 5000. Railway kadang tidak menyuntik $PORT ke build
-# Dockerfile, sehingga ekspansi "$PORT" gagal ("not a valid port number").
-# Dengan port tetap, set variable PORT=5000 di Railway agar router-nya cocok.
-CMD ["gunicorn", "run:app", "--bind", "0.0.0.0:5000", "--workers", "2"]
+# Jalankan migrasi lalu start gunicorn pada $PORT yang disediakan platform.
+# entrypoint.sh menangani ekspansi $PORT (Koyeb/Render/Railway) secara aman.
+CMD ["./entrypoint.sh"]

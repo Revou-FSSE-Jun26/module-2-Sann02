@@ -1,0 +1,5 @@
+# Pastikan shell script selalu pakai LF (bukan CRLF), supaya bisa dieksekusi
+# di dalam container Linux. Tanpa ini, Git di Windows bisa mengubahnya ke CRLF
+# dan menyebabkan error "no such file or directory" saat container start.
+*.sh text eol=lf
+entrypoint.sh text eol=lf
