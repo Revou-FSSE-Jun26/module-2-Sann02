@@ -1,5 +1,6 @@
 # app.py
 from flask import Flask
+from flask_cors import CORS
 from flasgger import Swagger
 from extensions import db, migrate
 from config import Config
@@ -12,6 +13,11 @@ app.config.from_object(Config)
 # Inisialisasi ekstensi
 db.init_app(app)
 migrate.init_app(app, db)
+
+# CORS: frontend Next.js (Module 3) memanggil API langsung dari browser
+# (login, register, cart checkout, dashboard CRUD). Auth memakai header
+# Authorization: Bearer <token>, bukan cookie, jadi origin "*" aman dipakai.
+CORS(app, resources={r"/*": {"origins": "*"}}, allow_headers=["Content-Type", "Authorization"])
 
 # ---- Swagger / OpenAPI (Flasgger) ----
 # Template mendefinisikan info API + skema keamanan Bearer (JWT) sehingga

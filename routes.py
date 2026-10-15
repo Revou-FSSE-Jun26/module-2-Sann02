@@ -96,9 +96,11 @@ def register_user():
         return jsonify({"error": f"Missing required fields: {', '.join(missing)}"}), 400
 
     try:
+        # Self-registration selalu menjadi customer; admin hanya dibuat lewat seed.
         new_user = User(
             username=data['username'],
-            email=data['email']
+            email=data['email'],
+            role='customer'
         )
         new_user.set_password(data['password'])  # Hash password
 
@@ -673,7 +675,9 @@ def get_orders():
             orders = Order.query.filter_by(user_id=user_id).all()
         else:
             orders = Order.query.all()
-        return jsonify([o.to_dict() for o in orders]), 200
+        # Sertakan items supaya frontend bisa menampilkan jumlah item per order
+        # tanpa request tambahan ke /orders/<id> (field tambahan, tidak breaking).
+        return jsonify([o.to_dict_with_items() for o in orders]), 200
     except SQLAlchemyError:
         return jsonify({"error": "Failed to fetch orders"}), 500
 
