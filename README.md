@@ -71,7 +71,7 @@ RevoShop adalah REST API backend untuk aplikasi e-commerce sederhana yang dibang
 |--------|----------|-------------|
 | GET | `/orders` | List orders (filter by user_id) |
 | GET | `/orders/<id>` | Detail order + items + product info |
-| POST | `/orders` | Buat order baru |
+| POST | `/orders` | Buat order baru (admin ditolak `403`) |
 | PUT | `/orders/<id>` | Update status/total order |
 | DELETE | `/orders/<id>` | Hapus order |
 
