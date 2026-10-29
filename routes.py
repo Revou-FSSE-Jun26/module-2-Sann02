@@ -765,6 +765,10 @@ def create_order():
     if user is None:
         return jsonify({"error": "User not found"}), 404
 
+    # Admin mengelola toko, bukan berbelanja.
+    if user.role == 'admin':
+        return jsonify({"error": "Admins cannot place orders"}), 403
+
     try:
         # Hitung total dan validasi produk
         total_amount = 0

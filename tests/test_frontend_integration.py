@@ -46,3 +46,23 @@ def test_delete_category_with_products_is_blocked(client):
 
     res = client.delete(f'/categories/{cid}')
     assert res.status_code == 409
+
+
+def test_admin_cannot_place_order(client):
+    from extensions import db
+    from models import User
+
+    cid = client.post('/categories', json={'name': 'AdminBlock'}).get_json()['id']
+    pid = client.post('/products', json={
+        'name': 'Item', 'price': 1000, 'category_id': cid
+    }).get_json()['id']
+    uid = _register(client, 'admin@test.com').get_json()['id']
+
+    admin = User.query.get(uid)
+    admin.role = 'admin'
+    db.session.commit()
+
+    res = client.post('/orders', json={
+        'user_id': uid, 'items': [{'product_id': pid, 'quantity': 1}]
+    })
+    assert res.status_code == 403
