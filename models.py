@@ -77,6 +77,7 @@ class Product(db.Model):
     description = db.Column(db.Text)
     price = db.Column(db.Numeric(10, 2), nullable=False)
     stock_quantity = db.Column(db.Integer, default=0)
+    image_url = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
@@ -87,6 +88,7 @@ class Product(db.Model):
             "description": self.description,
             "price": float(self.price),
             "stock_quantity": self.stock_quantity,
+            "image_url": self.image_url,
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
 

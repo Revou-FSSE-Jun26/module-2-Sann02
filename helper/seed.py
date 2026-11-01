@@ -6,6 +6,7 @@
 # Jalankan: python -m helper.seed
 
 import csv
+import json
 import os
 import random
 
@@ -16,6 +17,35 @@ from models import User, Category, Product
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 PRODUCTS_CSV = os.path.join(DATA_DIR, "tokopedia_komputer_laptop.csv")
+# Peta nama produk (prefix) -> URL foto asli Tokopedia.
+# Catatan: URL ini bisa kedaluwarsa; refresh dengan scrape ulang jika gambar mati.
+IMAGES_JSON = os.path.join(DATA_DIR, "tokopedia_images.json")
+
+
+def load_image_map():
+    """Muat peta prefix-nama -> URL gambar. Return {} kalau file tidak ada."""
+    if not os.path.exists(IMAGES_JSON):
+        return {}
+    with open(IMAGES_JSON, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def match_image_url(name: str, image_map: dict):
+    """Cocokkan nama produk ke peta gambar.
+
+    CSV menyederhanakan sebagian nama, jadi kita cocokkan berbasis prefix:
+    key cocok bila nama produk diawali key, atau key diawali nama produk.
+    Ambil kecocokan terpanjang supaya paling spesifik.
+    """
+    best_url = None
+    best_len = 0
+    for key, url in image_map.items():
+        if name.startswith(key) or key.startswith(name):
+            overlap = min(len(name), len(key))
+            if overlap > best_len:
+                best_len = overlap
+                best_url = url
+    return best_url
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +99,7 @@ def build_description(row: dict, category_name: str) -> str:
 
 def load_products_from_csv():
     """Baca produk hasil scrape dari CSV dan siapkan untuk di-seed."""
+    image_map = load_image_map()
     products = []
     with open(PRODUCTS_CSV, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -91,6 +122,7 @@ def load_products_from_csv():
                 "description": build_description(row, category_name),
                 # stok acak tapi deterministik agar hasil seed konsisten
                 "stock_quantity": random.randint(5, 80),
+                "image_url": match_image_url(name, image_map),
             })
     return products
 
@@ -140,10 +172,16 @@ def seed_products():
 
     created = 0
     skipped = 0
+    updated = 0
     for data in products:
         existing = Product.query.filter_by(name=data['name']).first()
         if existing:
-            skipped += 1
+            # Produk sudah ada: segarkan image_url bila berbeda dari data terbaru.
+            if data.get('image_url') and existing.image_url != data['image_url']:
+                existing.image_url = data['image_url']
+                updated += 1
+            else:
+                skipped += 1
             continue
 
         category_id = category_map.get(data['category'])
@@ -157,12 +195,13 @@ def seed_products():
             category_id=category_id,
             description=data['description'],
             stock_quantity=data['stock_quantity'],
+            image_url=data.get('image_url'),
         )
         db.session.add(product)
         created += 1
 
     db.session.commit()
-    print(f"  + {created} products created, {skipped} already existed (skipped)")
+    print(f"  + {created} products created, {updated} image_url updated, {skipped} skipped")
 
 
 def run():
