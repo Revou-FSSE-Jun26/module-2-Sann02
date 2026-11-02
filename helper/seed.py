@@ -17,35 +17,63 @@ from models import User, Category, Product
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 PRODUCTS_CSV = os.path.join(DATA_DIR, "tokopedia_komputer_laptop.csv")
-# Peta nama produk (prefix) -> URL foto asli Tokopedia.
-# Catatan: URL ini bisa kedaluwarsa; refresh dengan scrape ulang jika gambar mati.
-IMAGES_JSON = os.path.join(DATA_DIR, "tokopedia_images.json")
+# Peta nama-produk (persis) -> URL foto produk.
+# Sumber: Unsplash (images.unsplash.com) - hotlink diizinkan dan URL stabil
+# (tanpa signature kedaluwarsa, tidak seperti CDN Tokopedia yang balas 403).
+IMAGES_JSON = os.path.join(DATA_DIR, "product_images.json")
+
+# Fallback per-kategori bila sebuah produk tidak ada di peta gambar.
+# Urutan penting: pola yang lebih spesifik diletakkan lebih dulu.
+# (kata kunci dicek terhadap nama produk yang di-lowercase)
+IMAGE_FALLBACK_RULES = [
+    (("mousepad", "mouse pad", "deskmat"), "https://images.unsplash.com/photo-1629429407759-01cd3d7cfb38?w=640&q=80"),
+    (("keyboard", "combo"), "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=640&q=80"),
+    (("mouse",), "https://images.unsplash.com/photo-1527814050087-3793815479db?w=640&q=80"),
+    (("joystick", "game pad", "gamepad", "stick"), "https://images.unsplash.com/photo-1592840496694-26d035b52b48?w=640&q=80"),
+    (("macbook", "macos"), "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=640&q=80"),
+    (("backpack", "ransel", "punggung"), "https://images.unsplash.com/photo-1491637639811-60e2756cc1c7?w=640&q=80"),
+    (("tas", "sleeve", "sling", "handbag", "standbag", "selempang", "bag"), "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=640&q=80"),
+    (("stand", "holder", "dudukan"), "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=640&q=80"),
+    (("ram", "sodimm", "memory"), "https://images.unsplash.com/photo-1562976540-1502c2145186?w=640&q=80"),
+    (("cooler", "pendingin", "cooling", "heatpipe", "kipas"), "https://images.unsplash.com/photo-1587202372775-e229f172b9d7?w=640&q=80"),
+    (("wifi", "wireless adapter", "wn722n", "archer"), "https://images.unsplash.com/photo-1606904825846-647eb07f5be2?w=640&q=80"),
+    (("charger", "adaptor", "adapter", "gan", "desktop charger"), "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=640&q=80"),
+    (("hub", "docking", "splitter", "switch", "converter", "type c"), "https://images.unsplash.com/photo-1625842268584-8f3296236761?w=640&q=80"),
+    (("kabel", "cable"), "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=640&q=80"),
+    (("laptop", "notebook"), "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=640&q=80"),
+]
+# Fallback terakhir bila tidak ada kata kunci yang cocok sama sekali.
+IMAGE_FALLBACK_DEFAULT = "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=640&q=80"
 
 
 def load_image_map():
-    """Muat peta prefix-nama -> URL gambar. Return {} kalau file tidak ada."""
+    """Muat peta nama-produk -> URL gambar. Return {} kalau file tidak ada.
+
+    Kunci yang diawali '_' (mis. '_comment') diabaikan supaya bisa menaruh
+    catatan di dalam file JSON tanpa ikut terbaca sebagai produk.
+    """
     if not os.path.exists(IMAGES_JSON):
         return {}
     with open(IMAGES_JSON, encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+    return {k: v for k, v in data.items() if not k.startswith("_")}
 
 
 def match_image_url(name: str, image_map: dict):
-    """Cocokkan nama produk ke peta gambar.
+    """Pilih URL gambar untuk sebuah produk.
 
-    CSV menyederhanakan sebagian nama, jadi kita cocokkan berbasis prefix:
-    key cocok bila nama produk diawali key, atau key diawali nama produk.
-    Ambil kecocokan terpanjang supaya paling spesifik.
+    1. Coba kecocokan nama persis dari peta gambar (paling akurat).
+    2. Kalau tidak ada, pakai fallback berbasis kata kunci per-kategori
+       sehingga produk baru pun tetap dapat gambar yang masuk akal.
     """
-    best_url = None
-    best_len = 0
-    for key, url in image_map.items():
-        if name.startswith(key) or key.startswith(name):
-            overlap = min(len(name), len(key))
-            if overlap > best_len:
-                best_len = overlap
-                best_url = url
-    return best_url
+    if name in image_map:
+        return image_map[name]
+
+    lower = name.lower()
+    for keywords, url in IMAGE_FALLBACK_RULES:
+        if any(k in lower for k in keywords):
+            return url
+    return IMAGE_FALLBACK_DEFAULT
 
 
 # ---------------------------------------------------------------------------
