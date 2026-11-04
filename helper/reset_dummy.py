@@ -1,10 +1,11 @@
 # helper/reset_dummy.py
 # Hapus data DUMMY lama supaya toko hanya berisi data real hasil scrape Tokopedia.
 #
-# Data real = 6 kategori berikut beserta produknya; SELALU dipertahankan:
-#   Laptop, Mouse, Keyboard, Tas & Sleeve Laptop, Aksesoris Komputer, Komponen & Pendingin
+# Data real = kategori di helper/seed.py (CATEGORIES, hasil scrape "gift")
+# beserta produknya; SELALU dipertahankan.
 #
-# Semua kategori/produk DI LUAR daftar itu dianggap dummy.
+# Semua kategori/produk DI LUAR daftar itu dianggap dummy
+# (termasuk data lama bertema laptop/komputer).
 #
 # Mode:
 #   python -m helper.reset_dummy
@@ -22,17 +23,11 @@ import sys
 from app import app
 from extensions import db
 from models import Product, Category, Order, order_items
+from helper.seed import CATEGORY_NAMES
 
 
-# Kategori data real yang wajib dipertahankan.
-REAL_CATEGORIES = {
-    "Laptop",
-    "Mouse",
-    "Keyboard",
-    "Tas & Sleeve Laptop",
-    "Aksesoris Komputer",
-    "Komponen & Pendingin",
-}
+# Kategori data real yang wajib dipertahankan (satu sumber: helper/seed.py).
+REAL_CATEGORIES = set(CATEGORY_NAMES)
 
 
 def _dummy_category_ids():

@@ -21,3 +21,9 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Database backups from helper/backup_db.py & reset scripts (contain DB data)
+helper/_backup_*.csv
+helper/_image_url_backup_*.csv
+# Raw Tokopedia scrape captures (large, regenerate with helper/scrape_tokopedia_browser.mjs)
+helper/data/*_capture.json
